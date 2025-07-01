@@ -1,41 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8"/>
+<meta charset="UTF-8" />
 <title>Graficador de desigualdades (offline ligero)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.1/math.min.js"></script>
 <style>
-  canvas {
-    background: #fff;
-    border: 1px solid #000;
-    border-radius: 8px;
-  }
-  .btn {
-    background: #4b5563;
-    color: #fff;
-    font-weight: 600;
-    border-radius: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-  }
-  .mv {
-    width: 34px;
-    height: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  canvas{background:#fff;border:1px solid #000;border-radius:8px}
+  .btn{background:#4b5563;color:#fff;font-weight:600;border-radius:6px;padding:6px 12px;cursor:pointer}
+  .mv{width:34px;height:34px;display:flex;align-items:center;justify-content:center}
 </style>
 </head>
-<body style="background: #f3f4f6; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
-  <h1 style="font-size: 20px; font-weight: bold;">Graficador de desigualdades (offline ligero)</h1>
-  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 600px;" id="inputWrap"></div>
-  <button id="add" class="btn" style="background: #16a34a">+ añadir desigualdad</button>
-  <div style="display: flex; gap: 12px; align-items: center;">
-    <button id="draw" class="btn" style="background: #2563eb">Graficar región</button>
+<body style="background:#f3f4f6;padding:20px;display:flex;flex-direction:column;align-items:center;gap:16px">
+  <h1 style="font-size:20px;font-weight:bold">Graficador de desigualdades (offline ligero)</h1>
+  <div id="inputWrap" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;width:600px"></div>
+  <button id="add" class="btn" style="background:#16a34a">+ añadir desigualdad</button>
+  <div style="display:flex;gap:12px;align-items:center">
+    <button id="draw" class="btn" style="background:#2563eb">Graficar región</button>
     <button id="zin" class="btn">+</button>
     <button id="zout" class="btn">−</button>
-    <div style="display: grid; grid-template-columns: 3; gap: 0;">
+    <div style="display:grid;grid-template-columns:3;gap:0">
       <div></div><button class="btn mv" data-d="up">▲</button><div></div>
       <button class="btn mv" data-d="left">◀</button><button class="btn mv" data-d="re">⌖</button><button class="btn mv" data-d="right">▶</button>
       <div></div><button class="btn mv" data-d="down">▼</button><div></div>
@@ -44,160 +27,48 @@
   <canvas id="cv" width="1000" height="700"></canvas>
 
 <script>
-const tpl = () => `<input class="ineq" style="padding: 6px; border-radius: 4px; border: 1px solid #ccc;" placeholder="4*x+2*y<=100"/>`;
-const wrap = document.getElementById('inputWrap');
-for (let i = 0; i < 4; i++) wrap.insertAdjacentHTML('beforeend', tpl());
-document.getElementById('add').onclick = () => wrap.insertAdjacentHTML('beforeend', tpl());
+// ---------- Config inicial ----------
+const tpl=()=>`<input class="ineq" style="padding:6px;border:1px solid #ccc;border-radius:4px" placeholder="4*x+2*y<=100">`;
+const wrap=document.getElementById('inputWrap');for(let i=0;i<4;i++)wrap.insertAdjacentHTML('beforeend',tpl());
+document.getElementById('add').onclick=()=>wrap.insertAdjacentHTML('beforeend',tpl());
 
-const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-let scale = 40, off = {x: cv.width / 2, y: cv.height / 2};
-const pal = ['#ef4444','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899'];
+const cv=document.getElementById('cv');const ctx=cv.getContext('2d');let scale=40,off={x:cv.width/2,y:cv.height/2};
+const palette=["#e11d48","#3b82f6","#10b981","#f59e0b","#8b5cf6","#ec4899"];
 
-const tp = (x, y) => ({x: off.x + x * scale, y: off.y - y * scale});
-const tc = (px, py) => ({x: (px - off.x) / scale, y: (off.y - py) / scale});
+const tp=(x,y)=>({x:off.x+x*scale,y:off.y-y*scale});
+const tc=(px,py)=>({x:(px-off.x)/scale,y:(off.y-py)/scale});
 
-function parse(e) {
-  const ops = ['<=','>=','<','>','='];
-  const o = ops.find(op => e.includes(op));
-  if (!o) throw `Operador? -> ${e}`;
-  const [l, r] = e.split(o);
-  const ex = `(${math.parse(l)}) - (${math.parse(r)})`;
-  const test = (x, y) => {
-    const v = Function('x','y',`return ${ex}`)(x, y);
-    switch (o) {
-      case '<=': return v <= 1e-9;
-      case '<':  return v < 0;
-      case '>=': return v >= -1e-9;
-      case '>':  return v > 0;
-      default:   return Math.abs(v) < 1e-9;
-    }
-  };
-  return { raw: e, expr: ex, test, color: pal.pop() || '#000' };
-}
+// ---------- Parse desigualdad ----------
+function parse(str){str=str.replace(/\s+/g,"");const ops=["<=",">=","<",">","="];const op=ops.find(o=>str.includes(o));if(!op)throw"Operador no válido";const[lhs,rhs]=str.split(op);const expr=`(${math.parse(lhs)})-(${math.parse(rhs)})`;const fun=Function('x','y',`return ${expr}`);
+  return{raw:str,expr,fun,op,color:palette.shift()||"#000",test:(x,y)=>{const v=fun(x,y);switch(op){case"<=":return v<=1e-9;case"<":return v<0;case">=":return v>=-1e-9;case">":return v>0;default:return Math.abs(v)<1e-9;}}};}
 
-function grid() {
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = '#e5e7eb';
-  for (let x = off.x % scale; x < cv.width; x += scale) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cv.height); ctx.stroke();
-  }
-  for (let y = off.y % scale; y < cv.height; y += scale) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cv.width, y); ctx.stroke();
-  }
-  ctx.strokeStyle = '#000';
-  ctx.beginPath();
-  ctx.moveTo(0, off.y); ctx.lineTo(cv.width, off.y);
-  ctx.moveTo(off.x, 0); ctx.lineTo(off.x, cv.height);
-  ctx.stroke();
-  ctx.font = '10px Arial';
-  ctx.fillStyle = '#000';
-  for (let i = -cv.width / scale; i < cv.width / scale; i++) {
-    const p = tp(i, 0);
-    if (p.x > 0 && p.x < cv.width) ctx.fillText(i, p.x + 2, off.y + 12);
-  }
-  for (let j = -cv.height / scale; j < cv.height / scale; j++) {
-    const p = tp(0, j);
-    if (p.y > 0 && p.y < cv.height) ctx.fillText(j, p.x + 4, p.y - 2);
-  }
-}
+// ---------- Dibujar cuadrícula ----------
+function grid(){ctx.clearRect(0,0,cv.width,cv.height);ctx.strokeStyle="#e5e7eb";ctx.lineWidth=1;for(let x=off.x%scale;x<cv.width;x+=scale){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,cv.height);ctx.stroke();}for(let y=off.y%scale;y<cv.height;y+=scale){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke();}
+  ctx.strokeStyle="#000";ctx.beginPath();ctx.moveTo(0,off.y);ctx.lineTo(cv.width,off.y);ctx.moveTo(off.x,0);ctx.lineTo(off.x,cv.height);ctx.stroke();
+  ctx.font="10px 'Courier New'";ctx.fillStyle="#000";
+  const stepLabel=Math.max(1,Math.ceil(50/scale));
+  for(let i=-cv.width/scale;i<cv.width/scale;i++){if(i%stepLabel)continue;const p=tp(i,0);if(p.x>0&&p.x<cv.width)ctx.fillText(i,p.x+2,off.y+12);}for(let j=-cv.height/scale;j<cv.height/scale;j++){if(j%stepLabel)continue;const p=tp(0,j);if(p.y>0&&p.y<cv.height)ctx.fillText(j,p.x+4,p.y-4);} }
 
-function shade(ins) {
-  const img = ctx.getImageData(0, 0, cv.width, cv.height);
-  const d = img.data, step = 4;
-  for (let px = 0; px < cv.width; px += step) {
-    for (let py = 0; py < cv.height; py += step) {
-      const {x, y} = tc(px, py);
-      if (ins.every(f => f.test(x, y))) {
-        for (let dx = 0; dx < step; dx++) for (let dy = 0; dy < step; dy++) {
-          const id = ((py + dy) * cv.width + px + dx) * 4;
-          d[id] = 255; d[id+1] = 255; d[id+2] = 150; d[id+3] = 80;
-        }
-      }
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-}
+// ---------- Rellenar región ----------
+function shade(arr){const img=ctx.getImageData(0,0,cv.width,cv.height);const d=img.data,step=6;for(let px=0;px<cv.width;px+=step){for(let py=0;py<cv.height;py+=step){const {x,y}=tc(px,py);if(arr.every(o=>o.test(x,y))){for(let dx=0;dx<step;dx++)for(let dy=0;dy<step;dy++){const id=((py+dy)*cv.width+px+dx)*4;d[id]=255;d[id+1]=255;d[id+2]=180;d[id+3]=70;}}}}ctx.putImageData(img,0,0);} 
 
-function border(ins) {
-  ins.forEach(f => {
-    ctx.strokeStyle = f.color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    let started = false, lx = 0, ly = 0;
-    for (let px = 0; px < cv.width; px++) {
-      for (let py = 0; py < cv.height; py++) {
-        const {x, y} = tc(px, py);
-        if (Math.abs(Function('x','y',`return ${f.expr}`)(x, y)) < 1e-2) {
-          if (!started) { ctx.moveTo(px, py); started = true; }
-          else ctx.lineTo(px, py);
-          lx = px; ly = py; break;
-        }
-      }
-    }
-    ctx.stroke();
-    ctx.fillStyle = f.color;
-    ctx.font = '12px Arial';
-    ctx.fillText(f.raw, lx + 4, ly - 4);
-  });
-}
+// ---------- Dibujar fronteras ----------
+function border(arr){arr.forEach(o=>{ctx.strokeStyle=o.color;ctx.lineWidth=2;ctx.beginPath();let started=false;for(let px=0;px<cv.width;px++){const x=tc(px,0).x;let y;
+    // para encontrar y: resolver o.fun(x,y)=0 => y raíz
+    try{y=math.evaluate(`root(f(y),y)`,{f:(yy)=>o.fun(x,yy)});}catch{y=null;}
+    if(y===null||!isFinite(y))continue;const py=tp(0,y).y; if(py<0||py>cv.height)continue; if(!started){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);}ctx.stroke();ctx.fillStyle=o.color;ctx.font='12px Arial';ctx.fillText(o.raw,10+Math.random()*30,15+Math.random()*15);});}
 
-function verts(ins) {
-  const vs = new Set();
-  for (let i = 0; i < ins.length; i++) {
-    for (let j = i + 1; j < ins.length; j++) {
-      try {
-        const eq1 = ins[i].raw.replace(/<=|>=|<|>/, '='),
-              eq2 = ins[j].raw.replace(/<=|>=|<|>/, '=');
-        const node1 = math.parse(eq1);
-        const node2 = math.parse(eq2);
-        const code = math.compile(`x=${eq1}; y=${eq2}`);
+// ---------- Vértices ----------
+function verts(arr){const pts=new Set();for(let i=0;i<arr.length;i++)for(let j=i+1;j<arr.length;j++){const a=arr[i],b=arr[j];
+    // obtener coeficientes ax+by+c=0 para cada línea
+    const getABC=(o)=>{const node=math.parse(o.raw.replace(/<=|>=|<|>/,'-(')+')');const f=node.compile();const a=f.evaluate({x:1,y:0})-f.evaluate({x:0,y:0});const b=f.evaluate({x:0,y:1})-f.evaluate({x:0,y:0});const c=f.evaluate({x:0,y:0});return[a,b,c];};
+    const[A1,B1,C1]=getABC(a),[A2,B2,C2]=getABC(b);const det=A1*B2-A2*B1;if(Math.abs(det)<1e-9)continue;const x=(B2*C1-B1*C2)/det;const y=(A1*C2-A2*C1)/det; if(!isFinite(x)||!isFinite(y))continue; if(arr.every(o=>o.test(x,y))){pts.add(`${x.toFixed(2)},${y.toFixed(2)}`);} }
+  pts.forEach(s=>{const[x,y]=s.split(',').map(Number);const p=tp(x,y);ctx.beginPath();ctx.fillStyle='#f97316';ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#000';ctx.stroke();ctx.font='12px Arial';ctx.fillStyle='#000';ctx.fillText(`(${x},${y})`,p.x+6,p.y-6);});}
 
-        const sol = math.lusolve([
-          [math.derivative(eq1, 'x').evaluate({x:1,y:1}), math.derivative(eq1, 'y').evaluate({x:1,y:1})],
-          [math.derivative(eq2, 'x').evaluate({x:1,y:1}), math.derivative(eq2, 'y').evaluate({x:1,y:1})]
-        ], [
-          math.parse(eq1).evaluate({x:0,y:0}),
-          math.parse(eq2).evaluate({x:0,y:0})
-        ]).toArray();
+// ---------- Dibujar todo ----------
+function plot(){try{palette.splice(0,palette.length,...['#ef4444','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899']);const arr=[...document.querySelectorAll('.ineq')].map(i=>i.value.trim()).filter(Boolean).map(parse);grid();shade(arr);border(arr);verts(arr);}catch(e){alert(e);}}
 
-        const [x, y] = sol.map(v => Number(v.toFixed(2)));
-        if (ins.every(f => f.test(x, y))) vs.add(`${x},${y}`);
-      } catch (e) {}
-    }
-  }
-  vs.forEach(str => {
-    const [x, y] = str.split(',').map(Number);
-    const p = tp(x, y);
-    ctx.beginPath(); ctx.fillStyle = '#f97316';
-    ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI); ctx.fill();
-    ctx.font = '12px Arial';
-    ctx.fillText(`(${x},${y})`, p.x + 6, p.y - 4);
-  });
-}
-
-function plot() {
-  try {
-    const ins = [...document.querySelectorAll('.ineq')].map(e => e.value.trim()).filter(Boolean).map(parse);
-    grid(); shade(ins); border(ins); verts(ins);
-  } catch (e) { alert(e); }
-}
-
-document.getElementById('draw').onclick = plot;
-document.getElementById('zin').onclick = () => { scale = Math.min(scale + 10, 120); plot(); };
-document.getElementById('zout').onclick = () => { scale = Math.max(scale - 10, 10); plot(); };
-document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
-  const s = 20;
-  switch (b.dataset.d) {
-    case 'up': off.y += s; break;
-    case 'down': off.y -= s; break;
-    case 'left': off.x += s; break;
-    case 'right': off.x -= s; break;
-    default: off = {x: cv.width / 2, y: cv.height / 2};
-  }
-  plot();
-});
+document.getElementById('draw').onclick=plot;document.getElementById('zin').onclick=()=>{scale=Math.min(scale+10,120);plot();};document.getElementById('zout').onclick=()=>{scale=Math.max(scale-10,10);plot();};document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const s=20;switch(b.dataset.d){case'up':off.y+=s;break;case'down':off.y-=s;break;case'left':off.x+=s;break;case'right':off.x-=s;break;default:off={x:cv.width/2,y:cv.height/2};}plot();});
 
 plot();
 </script>
